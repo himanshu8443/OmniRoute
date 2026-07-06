@@ -158,11 +158,20 @@ export function resolveKiroRegion(
   credentials: { providerSpecificData?: unknown } | null | undefined
 ): string {
   const psd = (credentials?.providerSpecificData || {}) as Record<string, unknown>;
-  const region = typeof psd.region === "string" ? psd.region.trim().toLowerCase() : "";
-  if (region) return region;
+  const apiRegion =
+    typeof psd.apiRegion === "string"
+      ? psd.apiRegion.trim()
+      : typeof psd.api_region === "string"
+        ? psd.api_region.trim()
+        : "";
+  if (apiRegion) return apiRegion.toLowerCase();
+
   const arn = typeof psd.profileArn === "string" ? psd.profileArn.toLowerCase() : "";
   const match = arn.match(/^arn:aws:codewhisperer:([a-z0-9-]+):/);
-  return match ? match[1] : "us-east-1";
+  if (match) return match[1];
+
+  const region = typeof psd.region === "string" ? psd.region.trim().toLowerCase() : "";
+  return region || "us-east-1";
 }
 
 /**

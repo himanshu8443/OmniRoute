@@ -15,18 +15,35 @@ import assert from "node:assert/strict";
 import { resolveKiroRegion, kiroRuntimeHost } from "../../open-sse/executors/kiro.ts";
 import { kiro } from "@/lib/oauth/providers/kiro";
 
-test("resolveKiroRegion prefers the stored region", () => {
-  assert.equal(resolveKiroRegion({ providerSpecificData: { region: "eu-central-1" } }), "eu-central-1");
+test("resolveKiroRegion prefers the apiRegion override", () => {
+  assert.equal(
+    resolveKiroRegion({
+      providerSpecificData: {
+        api_region: "eu-central-1",
+        profileArn: "arn:aws:codewhisperer:us-east-1:1234:profile/X",
+        region: "ap-south-1",
+      },
+    }),
+    "eu-central-1"
+  );
 });
 
-test("resolveKiroRegion falls back to the region in the profileArn", () => {
+test("resolveKiroRegion falls back to profileArn if apiRegion is missing", () => {
   assert.equal(
     resolveKiroRegion({
       providerSpecificData: {
         profileArn: "arn:aws:codewhisperer:ap-southeast-2:123456789012:profile/ABC123",
+        region: "ap-south-1",
       },
     }),
     "ap-southeast-2"
+  );
+});
+
+test("resolveKiroRegion falls back to the stored region if nothing else is present", () => {
+  assert.equal(
+    resolveKiroRegion({ providerSpecificData: { region: "eu-central-1" } }),
+    "eu-central-1"
   );
 });
 

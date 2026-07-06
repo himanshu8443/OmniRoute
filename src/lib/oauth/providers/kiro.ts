@@ -8,9 +8,7 @@ export const kiro = {
     const candidateRegion = regionMatch?.[1] || "us-east-1";
     // Region is sourced from KIRO_CONFIG.tokenUrl (trusted constant) but defensively
     // re-validate before letting it influence later fetches (GHSA-6mwv-4mrm-5p3m).
-    const resolvedRegion = AWS_REGION_PATTERN.test(candidateRegion)
-      ? candidateRegion
-      : "us-east-1";
+    const resolvedRegion = AWS_REGION_PATTERN.test(candidateRegion) ? candidateRegion : "us-east-1";
     const registerPayload: {
       clientName: string;
       clientType: string;
@@ -138,38 +136,49 @@ export const kiro = {
     const accessToken = tokenData?.access_token;
     if (!accessToken) return null;
     const region = String(tokenData?._region || "us-east-1").toLowerCase();
-    // Defensive: tokenData._region came from upstream JSON or extraData
-    // and is interpolated into the runtime host below (GHSA-6mwv-4mrm-5p3m).
     if (!AWS_REGION_PATTERN.test(region)) return null;
-    const runtimeHost =
-      region === "us-east-1"
-        ? "https://codewhisperer.us-east-1.amazonaws.com"
-        : `https://q.${region}.amazonaws.com`;
-    try {
-      const profRes = await fetch(`${runtimeHost}/`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-amz-json-1.0",
-          Accept: "application/json",
-          "x-amz-target": "AmazonCodeWhispererService.ListAvailableProfiles",
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ maxResults: 10 }),
-        signal: AbortSignal.timeout(10000),
-      });
-      if (!profRes.ok) return null;
-      const profData = await profRes.json();
-      const profiles = Array.isArray(profData?.profiles) ? profData.profiles : [];
-      const matched =
-        profiles.find(
-          (p: { arn?: string }) => typeof p?.arn === "string" && p.arn.includes(`:${region}:`)
-        ) || profiles[0];
-      const arn = matched && typeof matched.arn === "string" ? matched.arn : undefined;
-      return arn ? { profileArn: arn } : null;
-    } catch {
-      // Best-effort profile discovery — never block login on it.
-      return null;
+
+    const tryDiscover = async (testRegion: string) => {
+      const runtimeHost =
+        testRegion === "us-east-1"
+          ? "https://codewhisperer.us-east-1.amazonaws.com"
+          : `https://q.${testRegion}.amazonaws.com`;
+      try {
+        const profRes = await fetch(`${runtimeHost}/`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-amz-json-1.0",
+            Accept: "application/json",
+            "x-amz-target": "AmazonCodeWhispererService.ListAvailableProfiles",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({ maxResults: 10 }),
+          signal: AbortSignal.timeout(5000),
+        });
+        if (!profRes.ok) return null;
+        const profData = await profRes.json();
+        return Array.isArray(profData?.profiles) && profData.profiles.length > 0
+          ? profData.profiles
+          : null;
+      } catch {
+        return null;
+      }
+    };
+
+    let profiles = await tryDiscover(region);
+    // If the SSO region yielded no profiles, CodeWhisperer is likely in us-east-1
+    if (!profiles && region !== "us-east-1") {
+      profiles = await tryDiscover("us-east-1");
     }
+
+    if (!profiles || profiles.length === 0) return null;
+
+    const matched =
+      profiles.find(
+        (p: { arn?: string }) => typeof p?.arn === "string" && p.arn.includes(`:${region}:`)
+      ) || profiles[0];
+    const arn = matched && typeof matched.arn === "string" ? matched.arn : undefined;
+    return arn ? { profileArn: arn } : null;
   },
   mapTokens: (tokens, extra) => ({
     accessToken: tokens.access_token,

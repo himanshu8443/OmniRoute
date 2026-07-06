@@ -35,12 +35,23 @@ test("parseKiroModels reads CodeWhisperer ListAvailableModels shape", () => {
   assert.equal(models[0].owned_by, "kiro");
 });
 
-test("resolveKiroRegion prefers stored region, then profileArn, else us-east-1", () => {
-  assert.equal(resolveKiroRegion({ region: "eu-central-1" }), "eu-central-1");
+test("resolveKiroRegion prefers apiRegion, then profileArn, then stored region", () => {
   assert.equal(
-    resolveKiroRegion({ profileArn: "arn:aws:codewhisperer:eu-central-1:123:profile/X" }),
+    resolveKiroRegion({
+      api_region: "ap-south-1",
+      profileArn: "arn:aws:codewhisperer:eu-central-1:123:profile/X",
+      region: "us-west-2",
+    }),
+    "ap-south-1"
+  );
+  assert.equal(
+    resolveKiroRegion({
+      profileArn: "arn:aws:codewhisperer:eu-central-1:123:profile/X",
+      region: "us-west-2",
+    }),
     "eu-central-1"
   );
+  assert.equal(resolveKiroRegion({ region: "eu-central-1" }), "eu-central-1");
   assert.equal(resolveKiroRegion({}), "us-east-1");
   assert.equal(resolveKiroRegion(null), "us-east-1");
 });

@@ -156,17 +156,26 @@ export async function getKiroUsage(accessToken?: string, providerSpecificData?: 
         : undefined;
 
     // Enterprise IAM Identity Center accounts are region-bound: the profileArn, token and
-    // endpoint must all match the region. Derive the region from the stored region (preferred)
-    // or the profileArn, then route to the regional Amazon Q endpoint (us-east-1 keeps the
-    // legacy codewhisperer host; codewhisperer.{region} does not resolve for other regions).
+    // endpoint must all match the region. Derive the region from apiRegion, then profileArn,
+    // then the stored region (legacy fallback), then route to the regional Amazon Q endpoint.
     const regionFromArn = profileArn
       ? profileArn.toLowerCase().match(/^arn:aws:codewhisperer:([a-z0-9-]+):/)?.[1]
       : undefined;
+
+    const apiRegion =
+      typeof providerSpecificData?.apiRegion === "string"
+        ? providerSpecificData.apiRegion.trim()
+        : typeof providerSpecificData?.api_region === "string"
+          ? providerSpecificData.api_region.trim()
+          : "";
+
+    const storedRegion =
+      typeof providerSpecificData?.region === "string"
+        ? providerSpecificData.region.trim().toLowerCase()
+        : "";
+
     const region =
-      (typeof providerSpecificData?.region === "string" &&
-        providerSpecificData.region.trim().toLowerCase()) ||
-      regionFromArn ||
-      "us-east-1";
+      (apiRegion ? apiRegion.toLowerCase() : "") || regionFromArn || storedRegion || "us-east-1";
     const usageBaseUrl =
       region === "us-east-1" ? CODEWHISPERER_BASE_URL : `https://q.${region}.amazonaws.com`;
 

@@ -81,15 +81,18 @@ export function parseKiroModels(data: unknown): KiroModel[] {
  */
 export function resolveKiroRegion(providerSpecificData: unknown): string {
   const psd = asRecord(providerSpecificData);
-  const explicit = toNonEmptyString(psd.region);
-  if (explicit) return explicit.toLowerCase();
+
+  const apiRegion = toNonEmptyString(psd.apiRegion) || toNonEmptyString(psd.api_region);
+  if (apiRegion) return apiRegion.toLowerCase();
 
   const profileArn = toNonEmptyString(psd.profileArn);
   const fromArn = profileArn
     ? profileArn.toLowerCase().match(/^arn:aws:codewhisperer:([a-z0-9-]+):/)?.[1]
     : undefined;
+  if (fromArn) return fromArn;
 
-  return fromArn || "us-east-1";
+  const explicit = toNonEmptyString(psd.region);
+  return explicit ? explicit.toLowerCase() : "us-east-1";
 }
 
 /**
